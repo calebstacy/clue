@@ -4,8 +4,10 @@ PyAudioWPatch>=0.2.12.6
 # Transcription (local - runs on GPU)
 faster-whisper>=1.0.0
 
-# LLM - local via Ollama
+# LLM - Multiple providers
 ollama>=0.3.0
+anthropic>=0.40.0  # Optional: for Claude API support
+openai>=1.0.0  # Optional: for OpenAI API support
 
 # UI
 PyQt6>=6.6.0

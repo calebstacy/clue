@@ -8,7 +8,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onPythonMessage: (callback) => ipcRenderer.on('python-message', (event, data) => callback(data)),
 
     // Window controls
-    minimizeWindow: () => ipcRenderer.send('minimize-window'),
+    minimize: () => ipcRenderer.send('minimize-window'),
+    close: () => ipcRenderer.send('close-window'),
 
     // Drag window
     startDrag: (deltaX, deltaY) => ipcRenderer.send('window-drag', { deltaX, deltaY })

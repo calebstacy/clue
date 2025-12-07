@@ -23,8 +23,12 @@ class LocalCluelyElectron:
     def __init__(
         self,
         whisper_model: str = "large-v3",
-        llm_model: str = "llama3.1:8b",
+        llm_provider: str = "ollama",
+        llm_model: str = "llama3.2:3b",
         transcript_seconds: float = 60,
+        api_base_url: str = None,
+        api_key: str = None,
+        anthropic_api_key: str = None,
     ):
         self.transcript_seconds = transcript_seconds
         self.is_running = False
@@ -46,8 +50,14 @@ class LocalCluelyElectron:
             compute_type="float16"
         )
 
-        print("[3/4] Initializing Ollama LLM client...")
-        self.llm_client = LLMClient(model=llm_model)
+        print(f"[3/4] Initializing {llm_provider.upper()} LLM client...")
+        self.llm_client = LLMClient(
+            provider=llm_provider,
+            model=llm_model,
+            api_base_url=api_base_url,
+            api_key=api_key,
+            anthropic_api_key=anthropic_api_key,
+        )
 
         print("[4/4] Setting up socket bridge for Electron UI...")
         self.bridge = SocketBridge(port=9999)
@@ -79,6 +89,7 @@ class LocalCluelyElectron:
         self.bridge.on('suggest', self._handle_suggest)
         self.bridge.on('question', self._handle_question)
         self.bridge.on('clear', self._handle_clear)
+        self.bridge.on('set_context', self._handle_set_context)
 
     def _handle_suggest(self, data):
         """Handle suggestion request from Electron."""
@@ -98,6 +109,12 @@ class LocalCluelyElectron:
         self.transcriber.clear_buffer()
         self.bridge.send_transcript("")
         self.bridge.send_notes("")
+
+    def _handle_set_context(self, data):
+        """Handle context setting from Electron."""
+        context = data.get('text', '')
+        self._user_context = context
+        print(f"Context set: {context[:50]}..." if len(context) > 50 else f"Context set: {context}")
 
     def _answer_question(self, question: str):
         """Answer a question about the conversation."""
@@ -292,7 +309,7 @@ def main():
     whisper_config = config.get("whisper", {})
     context_config = config.get("context", {})
 
-    parser = argparse.ArgumentParser(description="LocalCluely with Electron UI (Local-only)")
+    parser = argparse.ArgumentParser(description="LocalCluely with Electron UI")
     parser.add_argument(
         "--whisper",
         default=whisper_config.get("model", "large-v3"),
@@ -300,9 +317,30 @@ def main():
         help="Whisper model size"
     )
     parser.add_argument(
+        "--llm",
+        default=llm_config.get("provider", "ollama"),
+        choices=["ollama", "claude", "openai"],
+        help="LLM provider"
+    )
+    parser.add_argument(
         "--model",
-        default=llm_config.get("model", "llama3.1:8b"),
-        help="Ollama model name (e.g., llama3.1:8b, mistral, phi3)"
+        default=llm_config.get("model", "llama3.2:3b"),
+        help="LLM model name"
+    )
+    parser.add_argument(
+        "--api-url",
+        default=llm_config.get("openai_api_base"),
+        help="Base URL for OpenAI-compatible API"
+    )
+    parser.add_argument(
+        "--api-key",
+        default=llm_config.get("openai_api_key"),
+        help="API key for OpenAI-compatible API"
+    )
+    parser.add_argument(
+        "--anthropic-key",
+        default=llm_config.get("anthropic_api_key"),
+        help="API key for Claude"
     )
     parser.add_argument(
         "--context",
@@ -315,8 +353,12 @@ def main():
 
     cluely = LocalCluelyElectron(
         whisper_model=args.whisper,
+        llm_provider=args.llm,
         llm_model=args.model,
         transcript_seconds=args.context,
+        api_base_url=args.api_url,
+        api_key=args.api_key,
+        anthropic_api_key=args.anthropic_key,
     )
 
     cluely.run()

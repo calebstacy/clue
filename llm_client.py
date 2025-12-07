@@ -1,6 +1,6 @@
 """
 LLM client for generating responses.
-Local-only version using Ollama.
+Supports multiple providers: Ollama (local), Claude (Anthropic), and OpenAI.
 """
 
 import ollama
@@ -8,6 +8,19 @@ from typing import Optional
 import json
 from datetime import datetime
 from pathlib import Path
+
+# Optional imports for API providers
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
 
 
 class SessionLogger:
@@ -66,24 +79,56 @@ def get_logger() -> SessionLogger:
 class LLMClient:
     def __init__(
         self,
-        model: str = "llama3.1:8b",  # Good balance of speed/quality
+        provider: str = "ollama",
+        model: str = "llama3.2:3b",
+        api_base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        anthropic_api_key: Optional[str] = None,
     ):
         """
-        Initialize LLM client with Ollama.
+        Initialize LLM client with specified provider.
 
         Args:
-            model: Ollama model name (e.g., "llama3.1:8b", "mistral", "phi3")
+            provider: "ollama", "claude", or "openai"
+            model: Model name (e.g., "llama3.2:3b", "claude-3-5-sonnet-20241022", "gpt-4")
+            api_base_url: Base URL for OpenAI-compatible API
+            api_key: API key for OpenAI-compatible API
+            anthropic_api_key: API key for Claude
         """
+        self.provider = provider.lower()
         self.model = model
 
-        # Test Ollama connection
-        try:
-            ollama.list()
-            print(f"Ollama connected, using model: {model}")
-        except Exception as e:
-            print(f"Ollama not running? Error: {e}")
-            print("Start Ollama with: ollama serve")
-            print(f"Then pull model: ollama pull {model}")
+        # Initialize provider-specific clients
+        if self.provider == "ollama":
+            try:
+                ollama.list()
+                print(f"Ollama connected, using model: {model}")
+            except Exception as e:
+                print(f"Ollama not running? Error: {e}")
+                print("Start Ollama with: ollama serve")
+                print(f"Then pull model: ollama pull {model}")
+
+        elif self.provider == "claude":
+            if not ANTHROPIC_AVAILABLE:
+                raise ImportError("anthropic package not installed. Run: pip install anthropic")
+            if not anthropic_api_key:
+                raise ValueError("anthropic_api_key required for Claude provider")
+            self.anthropic_client = anthropic.Anthropic(api_key=anthropic_api_key)
+            print(f"Claude API initialized, using model: {model}")
+
+        elif self.provider == "openai":
+            if not OPENAI_AVAILABLE:
+                raise ImportError("openai package not installed. Run: pip install openai")
+            if not api_key:
+                raise ValueError("api_key required for OpenAI provider")
+            self.openai_client = openai.OpenAI(
+                api_key=api_key,
+                base_url=api_base_url
+            )
+            print(f"OpenAI API initialized, using model: {model}")
+
+        else:
+            raise ValueError(f"Unknown provider: {provider}. Use 'ollama', 'claude', or 'openai'")
 
     def _build_prompt(self, transcript: str, user_context: Optional[str] = None) -> tuple:
         """Build the prompt for the LLM."""
@@ -115,36 +160,20 @@ Respond with ONLY the suggested text, no explanations."""
     def _build_interpretation_prompt(self, transcript: str, context: Optional[str] = None) -> tuple:
         """Build prompt for meeting notes style summary."""
 
-        system = """You are creating professional meeting notes from a live conversation. Write in a clean, structured format that someone could use as actual meeting documentation.
+        system = """Create brief meeting notes. Be extremely concise.
 
-Structure your notes like this:
-
-<b>Overview</b>
-One sentence describing what this conversation is about.
+Format:
+<b>Topic:</b> One line summary
 
 <b>Key Points</b>
-• Main topic or decision discussed
-• Another important point
-• Significant information shared
+• Point 1
+• Point 2
+• Point 3
 
-<b>Action Items</b> (if any)
-• [Person]: Task or commitment they made
-• [Person]: Another action item
+<b>Action Items</b> (only if mentioned)
+• Who: What
 
-<b>Open Questions</b> (if any)
-• Questions raised but not answered
-• Topics to follow up on
-
-Guidelines:
-- Write in third person past tense ("discussed", "decided", "mentioned")
-- Focus on substance, not play-by-play
-- Combine related points rather than listing everything said
-- Use names when you hear them, otherwise use roles
-- For media/entertainment: focus on main topics, interesting points, key moments
-- Keep it scannable - someone should get the gist in 10 seconds
-- Update the overview as you learn more about the conversation
-
-Format using HTML: <b>bold</b> for headers, • for bullets, <br> for line breaks."""
+Rules: Max 5 bullet points total. No fluff. HTML format only."""
 
         user_msg = ""
         if context:
@@ -156,18 +185,9 @@ Format using HTML: <b>bold</b> for headers, • for bullets, <br> for line break
     def _build_question_prompt(self, transcript: str, question: str, context: Optional[str] = None) -> tuple:
         """Build prompt for answering questions about the conversation."""
 
-        system = """You are a helpful assistant that answers questions about a conversation transcript. The user may have missed something or wants clarification about what was discussed.
-
-Guidelines:
-- Answer based ONLY on what's in the transcript
-- If the information isn't in the transcript, say so
-- Be specific - quote relevant parts when helpful
-- If the question is about something that wasn't discussed, let them know
-- Keep answers concise but complete
-
-Format: Use plain text for simple answers. For longer answers, use HTML:
-- <b>bold</b> for emphasis
-- • for bullet points if listing multiple items"""
+        system = """Answer questions about this conversation. Be brief and direct.
+Only use info from the transcript. Say "not mentioned" if it wasn't discussed.
+1-3 sentences max. Use <b>bold</b> for key terms if needed."""
 
         user_msg = ""
         if context:
@@ -197,7 +217,7 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
             return "No conversation detected yet..."
 
         system, user_msg = self._build_prompt(transcript, context)
-        result = self._query_ollama(system, user_msg, max_tokens)
+        result = self._query_llm(system, user_msg, max_tokens)
 
         # Log the suggestion
         get_logger().log_suggestion(transcript, result, self.model)
@@ -225,7 +245,7 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
             return "Waiting for conversation..."
 
         system, user_msg = self._build_interpretation_prompt(transcript, context)
-        return self._query_ollama(system, user_msg, max_tokens)
+        return self._query_llm(system, user_msg, max_tokens)
 
     def ask_question(
         self,
@@ -253,26 +273,51 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
             return "Please enter a question."
 
         system, user_msg = self._build_question_prompt(transcript, question, context)
-        return self._query_ollama(system, user_msg, max_tokens)
+        return self._query_llm(system, user_msg, max_tokens)
 
-    def _query_ollama(self, system: str, user_msg: str, max_tokens: int) -> str:
-        """Query local Ollama instance."""
+    def _query_llm(self, system: str, user_msg: str, max_tokens: int) -> str:
+        """Query the LLM based on configured provider."""
         try:
-            response = ollama.chat(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_msg}
-                ],
-                options={
-                    "num_predict": max_tokens,
-                    "temperature": 0.7,
-                }
-            )
-            return response["message"]["content"].strip()
+            if self.provider == "ollama":
+                response = ollama.chat(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user_msg}
+                    ],
+                    options={
+                        "num_predict": max_tokens,
+                        "temperature": 0.7,
+                    }
+                )
+                return response["message"]["content"].strip()
+
+            elif self.provider == "claude":
+                response = self.anthropic_client.messages.create(
+                    model=self.model,
+                    max_tokens=max_tokens,
+                    temperature=0.7,
+                    system=system,
+                    messages=[
+                        {"role": "user", "content": user_msg}
+                    ]
+                )
+                return response.content[0].text.strip()
+
+            elif self.provider == "openai":
+                response = self.openai_client.chat.completions.create(
+                    model=self.model,
+                    max_tokens=max_tokens,
+                    temperature=0.7,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user_msg}
+                    ]
+                )
+                return response.choices[0].message.content.strip()
 
         except Exception as e:
-            return f"Ollama error: {e}"
+            return f"{self.provider.capitalize()} error: {e}"
 
 
 # Quick test

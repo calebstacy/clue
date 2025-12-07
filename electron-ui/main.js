@@ -67,17 +67,20 @@ function createWindow() {
     const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
 
     mainWindow = new BrowserWindow({
-        width: 460,
-        height: 620,
-        x: screenWidth - 480,
-        y: 80,
+        width: 476,  // Increased for 8px padding on each side
+        height: 636, // Increased for 8px padding on each side
+        x: screenWidth - 496,
+        y: 72,
         frame: false,
         transparent: true,
         alwaysOnTop: true,
         skipTaskbar: false,
         resizable: false,
-        hasShadow: false,
-        backgroundMaterial: 'acrylic',
+        hasShadow: true,
+        backgroundColor: '#00000000',
+        vibrancy: 'dark', // macOS
+        backgroundMaterial: 'acrylic', // Windows
+        roundedCorners: true, // Windows 11
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -85,7 +88,23 @@ function createWindow() {
         }
     });
 
+    // For Windows 11, try to enable rounded corners via DWM
+    if (process.platform === 'win32') {
+        mainWindow.setBackgroundColor('#00000000');
+    }
+
     mainWindow.loadFile('index.html');
+
+    // Apply rounded corners after window loads
+    mainWindow.webContents.on('did-finish-load', () => {
+        // Inject CSS to ensure rounded corners clip content
+        mainWindow.webContents.insertCSS(`
+            html, body {
+                border-radius: 16px;
+                overflow: hidden;
+            }
+        `);
+    });
 
     // Prevent window from being destroyed, just hide it
     mainWindow.on('close', (e) => {
@@ -150,4 +169,9 @@ ipcMain.on('window-drag', (event, { deltaX, deltaY }) => {
 
 ipcMain.on('minimize-window', () => {
     mainWindow.hide();
+});
+
+ipcMain.on('close-window', () => {
+    app.isQuitting = true;
+    app.quit();
 });
