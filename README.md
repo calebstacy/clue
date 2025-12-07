@@ -25,7 +25,7 @@ Download from https://ollama.ai and install.
 
 Then pull a model:
 ```bash
-ollama pull llama3.1:8b
+ollama pull llama3.2:3b
 ```
 
 ### 2. Install Python dependencies
