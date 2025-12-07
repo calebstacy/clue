@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalCluely</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-glass: rgba(255, 255, 255, 0.02);
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-input: rgba(255, 255, 255, 0.06);
+            --bg-hover: rgba(255, 255, 255, 0.1);
+            --border: rgba(255, 255, 255, 0.12);
+            --border-light: rgba(255, 255, 255, 0.18);
+            --text-primary: rgba(255, 255, 255, 0.95);
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-muted: rgba(255, 255, 255, 0.45);
+            --accent: rgba(255, 255, 255, 0.9);
+            --accent-light: rgba(255, 255, 255, 0.95);
+            --accent-dim: rgba(255, 255, 255, 0.08);
+            --success: #34d399;
+            --success-dim: rgba(52, 211, 153, 0.2);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+            font-size: 13px;
+            color: var(--text-primary);
+            background: transparent;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 12px;
+            gap: 10px;
+            background: rgba(40, 40, 45, 0.5);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        /* Control Bar */
+        .control-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: var(--bg-glass);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            -webkit-app-region: drag;
+        }
+
+        .control-bar button {
+            -webkit-app-region: no-drag;
+        }
+
+        .pause-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            font-size: 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pause-btn:hover {
+            background: var(--bg-hover);
+        }
+
+        .audio-indicator {
+            display: flex;
+            gap: 3px;
+            align-items: center;
+            height: 16px;
+        }
+
+        .audio-bar {
+            width: 3px;
+            background: var(--accent-light);
+            border-radius: 2px;
+            transition: height 0.1s ease;
+        }
+
+        .timer {
+            font-size: 14px;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .spacer {
+            flex: 1;
+        }
+
+        .control-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .shortcut {
+            font-size: 11px;
+            color: var(--text-muted);
+            background: var(--bg-input);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* Main Panel */
+        .main-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-glass);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 12px;
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .header-btn:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
+        .icon-btn {
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .icon-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .panel-content {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .topic-label {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .insights-text {
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        /* Insight Cards */
+        .insights-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .insight-card {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            flex: 1 1 calc(50% - 5px);
+            min-width: 150px;
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+
+        .insight-card:hover {
+            background: rgba(255, 255, 255, 0.09);
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+
+        .insight-card.full-width {
+            flex: 1 1 100%;
+        }
+
+        .insight-card-icon {
+            font-size: 14px;
+            margin-right: 8px;
+        }
+
+        .insight-card-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+        }
+
+        .insight-card-content {
+            color: var(--text-secondary);
+        }
+
+        .actions-label {
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 10px 12px;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .action-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        /* Chat View */
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 10px;
+            max-width: 90%;
+        }
+
+        .message.user {
+            background: var(--accent-dim);
+            border: 1px solid var(--accent);
+            align-self: flex-end;
+        }
+
+        .message.ai {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            align-self: flex-start;
+        }
+
+        .chat-input-area {
+            padding: 12px;
+            background: var(--bg-input);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+        }
+
+        .chat-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .send-btn {
+            padding: 8px 16px;
+            background: var(--accent);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .send-btn:hover {
+            background: var(--accent-light);
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            padding: 8px 12px 12px;
+        }
+
+        .quick-btn {
+            padding: 6px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .quick-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        /* Nav Bar */
+        .nav-bar {
+            display: flex;
+            gap: 4px;
+            padding: 8px;
+            background: var(--bg-glass);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+
+        .nav-tab {
+            flex: 1;
+            padding: 8px 16px;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .nav-tab:hover {
+            color: var(--text-secondary);
+        }
+
+        .nav-tab.active {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        /* Live badge */
+        .live-badge {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--success);
+            background: var(--success-dim);
+            padding: 4px 8px;
+            border-radius: 8px;
+        }
+
+        /* Transcript */
+        .transcript-text {
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-light);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* Views */
+        .view {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .view.active {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Control Bar -->
+        <div class="control-bar">
+            <button class="pause-btn" id="pauseBtn">⏸</button>
+            <div class="audio-indicator" id="audioIndicator">
+                <div class="audio-bar" style="height: 6px;"></div>
+                <div class="audio-bar" style="height: 10px;"></div>
+                <div class="audio-bar" style="height: 8px;"></div>
+            </div>
+            <span class="timer" id="timer">00:00</span>
+            <button class="pause-btn" id="clearBtn" title="Clear session">🗑</button>
+            <div class="spacer"></div>
+            <span class="control-text">Ask AI</span>
+            <span class="shortcut">⌘ ↵</span>
+            <span class="control-text" style="margin-left: 8px;">Show/Hide</span>
+            <span class="shortcut">⌘ \</span>
+        </div>
+
+        <!-- Main Panel -->
+        <div class="main-panel">
+            <!-- Insights View -->
+            <div class="view active" id="insightsView">
+                <div class="panel-header">
+                    <span class="panel-title">✨ Live insights</span>
+                    <div class="spacer"></div>
+                    <button class="header-btn">A≡ Show transcript</button>
+                    <button class="icon-btn">⧉</button>
+                </div>
+                <div class="panel-content">
+                    <div class="topic-label" id="topicLabel">Discussion topic</div>
+                    <div class="insights-container" id="insightsContainer">
+                        <div class="insight-card full-width">
+                            <div class="insight-card-content" style="color: var(--text-muted);">
+                                Waiting for conversation to begin...
+                            </div>
+                        </div>
+                    </div>
+                    <div class="spacer"></div>
+                    <div class="actions-label">Actions</div>
+                    <button class="action-btn" id="actionTopics">📋 Define key topics</button>
+                    <button class="action-btn" id="actionSearch">🌐 Search the web for information</button>
+                    <button class="action-btn" id="actionQuestions">💬 Suggest follow-up questions</button>
+                    <button class="action-btn" id="actionInfo">✨ Give me helpful information</button>
+                </div>
+            </div>
+
+            <!-- Chat View -->
+            <div class="view" id="chatView">
+                <div class="panel-header">
+                    <span class="panel-title">Chat</span>
+                    <div class="spacer"></div>
+                </div>
+                <div class="chat-messages" id="chatMessages">
+                    <!-- Messages will be added here -->
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" class="chat-input" id="chatInput" placeholder="Ask about the conversation...">
+                    <button class="send-btn" id="sendBtn">Send</button>
+                </div>
+                <div class="quick-actions">
+                    <button class="quick-btn" id="suggestBtn">What should I say?</button>
+                    <button class="quick-btn" id="summarizeBtn">Summarize</button>
+                </div>
+            </div>
+
+            <!-- Transcript View -->
+            <div class="view" id="transcriptView">
+                <div class="panel-header">
+                    <span class="panel-title">Transcript</span>
+                    <div class="spacer"></div>
+                    <span class="live-badge">● LIVE</span>
+                </div>
+                <div class="panel-content">
+                    <div class="transcript-text" id="transcriptText">Transcript will appear here as people speak...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nav Bar -->
+        <div class="nav-bar">
+            <button class="nav-tab active" data-view="insights">Insights</button>
+            <button class="nav-tab" data-view="chat">Chat</button>
+            <button class="nav-tab" data-view="transcript">Transcript</button>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let isRecording = true;
+        let startTime = Date.now();
+
+        // Elements
+        const pauseBtn = document.getElementById('pauseBtn');
+        const timer = document.getElementById('timer');
+        const audioIndicator = document.getElementById('audioIndicator');
+        const navTabs = document.querySelectorAll('.nav-tab');
+        const views = document.querySelectorAll('.view');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const chatMessages = document.getElementById('chatMessages');
+        const insightsContainer = document.getElementById('insightsContainer');
+        const transcriptText = document.getElementById('transcriptText');
+        const topicLabel = document.getElementById('topicLabel');
+
+        // Timer
+        setInterval(() => {
+            if (isRecording) {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const secs = (elapsed % 60).toString().padStart(2, '0');
+                timer.textContent = `${mins}:${secs}`;
+            }
+        }, 1000);
+
+        // Audio bars animation
+        const bars = audioIndicator.querySelectorAll('.audio-bar');
+        setInterval(() => {
+            if (isRecording) {
+                bars.forEach(bar => {
+                    const height = Math.random() * 10 + 4;
+                    bar.style.height = `${height}px`;
+                });
+            }
+        }, 100);
+
+        // Pause/Play
+        pauseBtn.addEventListener('click', () => {
+            isRecording = !isRecording;
+            pauseBtn.textContent = isRecording ? '⏸' : '▶';
+            bars.forEach(bar => {
+                bar.style.background = isRecording ? 'var(--accent-light)' : 'var(--text-muted)';
+                if (!isRecording) bar.style.height = '4px';
+            });
+        });
+
+        // Clear session
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            // Reset timer
+            startTime = Date.now();
+            timer.textContent = '00:00';
+
+            // Clear local UI
+            transcriptText.textContent = 'Transcript will appear here as people speak...';
+            chatMessages.innerHTML = '';
+            insightsContainer.innerHTML = `
+                <div class="insight-card full-width">
+                    <div class="insight-card-content" style="color: var(--text-muted);">
+                        Waiting for conversation to begin...
+                    </div>
+                </div>
+            `;
+            topicLabel.textContent = 'Discussion topic';
+
+            // Send clear to Python backend
+            if (window.electronAPI) {
+                window.electronAPI.sendToPython({ type: 'clear' });
+            }
+        });
+
+        // Navigation
+        navTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                navTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                const viewName = tab.dataset.view;
+                views.forEach(v => v.classList.remove('active'));
+                document.getElementById(`${viewName}View`).classList.add('active');
+            });
+        });
+
+        // Chat
+        function addMessage(text, isUser) {
+            const msg = document.createElement('div');
+            msg.className = `message ${isUser ? 'user' : 'ai'}`;
+            msg.textContent = text;
+            chatMessages.appendChild(msg);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function sendChat() {
+            const text = chatInput.value.trim();
+            if (text) {
+                addMessage(text, true);
+                chatInput.value = '';
+
+                // Send to Python
+                if (window.electronAPI) {
+                    window.electronAPI.sendToPython({ type: 'question', text });
+                }
+            }
+        }
+
+        sendBtn.addEventListener('click', sendChat);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendChat();
+        });
+
+        document.getElementById('suggestBtn').addEventListener('click', () => {
+            addMessage('What should I say next?', true);
+            if (window.electronAPI) {
+                window.electronAPI.sendToPython({ type: 'suggest' });
+            }
+        });
+
+        document.getElementById('summarizeBtn').addEventListener('click', () => {
+            addMessage('Summarize the conversation.', true);
+            if (window.electronAPI) {
+                window.electronAPI.sendToPython({ type: 'question', text: 'Summarize the conversation so far.' });
+            }
+        });
+
+        // Render insight cards from notes text
+        function renderInsightCards(text) {
+            if (!text || !text.trim()) return;
+
+            // Parse the text - split by bullet points, numbers, or newlines
+            const lines = text.split(/\n/).filter(line => line.trim());
+
+            // Group related lines into insight items
+            const insights = [];
+            let currentInsight = '';
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                // Check if this is a new bullet point or numbered item
+                if (/^[-•*]\s|^\d+[.)]\s/.test(trimmed)) {
+                    if (currentInsight) {
+                        insights.push(currentInsight);
+                    }
+                    // Remove the bullet/number prefix
+                    currentInsight = trimmed.replace(/^[-•*]\s|^\d+[.)]\s/, '');
+                } else if (trimmed) {
+                    // Continuation or standalone line
+                    if (currentInsight) {
+                        currentInsight += ' ' + trimmed;
+                    } else {
+                        currentInsight = trimmed;
+                    }
+                }
+            }
+            if (currentInsight) {
+                insights.push(currentInsight);
+            }
+
+            // If no structured insights found, treat whole text as one insight
+            if (insights.length === 0) {
+                insights.push(text);
+            }
+
+            // Icons for variety
+            const icons = ['💡', '📌', '🎯', '✨', '📊', '🔑'];
+
+            // Build HTML
+            insightsContainer.innerHTML = insights.map((insight, i) => {
+                const icon = icons[i % icons.length];
+                const isFullWidth = insight.length > 80 || insights.length === 1;
+                return `
+                    <div class="insight-card${isFullWidth ? ' full-width' : ''}">
+                        <div class="insight-card-content">
+                            <span class="insight-card-icon">${icon}</span>
+                            ${insight}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Handle messages from Python
+        if (window.electronAPI) {
+            window.electronAPI.onPythonMessage((data) => {
+                console.log('Received from Python:', data);
+                switch (data.type) {
+                    case 'transcript':
+                        if (data.text) {
+                            transcriptText.textContent += ' ' + data.text;
+                        }
+                        break;
+                    case 'notes':
+                        renderInsightCards(data.text);
+                        break;
+                    case 'answer':
+                        addMessage(data.text, false);
+                        break;
+                    case 'suggestion':
+                        // Show suggestion as an AI message and switch to chat view
+                        addMessage(data.text, false);
+                        // Switch to chat view
+                        navTabs.forEach(t => t.classList.remove('active'));
+                        document.querySelector('[data-view="chat"]').classList.add('active');
+                        views.forEach(v => v.classList.remove('active'));
+                        document.getElementById('chatView').classList.add('active');
+                        break;
+                    case 'topic':
+                        topicLabel.textContent = data.text;
+                        break;
+                    case 'status':
+                        console.log('Status:', data.status);
+                        break;
+                }
+            });
+        }
+
+        // Connection status
+        console.log('LocalCluely UI loaded. Waiting for Python backend...');
+    </script>
+</body>
+</html>
