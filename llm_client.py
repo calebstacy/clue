@@ -1,12 +1,10 @@
 """
 LLM client for generating responses.
-Supports Ollama (local), Claude API, and OpenAI-compatible endpoints.
+Local-only version using Ollama.
 """
 
 import ollama
-import requests
 from typing import Optional
-import os
 import json
 from datetime import datetime
 from pathlib import Path
@@ -68,49 +66,25 @@ def get_logger() -> SessionLogger:
 class LLMClient:
     def __init__(
         self,
-        provider: str = "ollama",
         model: str = "llama3.1:8b",  # Good balance of speed/quality
-        anthropic_api_key: Optional[str] = None,
-        api_base_url: Optional[str] = None,
-        api_key: Optional[str] = None,
     ):
         """
-        Initialize LLM client.
+        Initialize LLM client with Ollama.
 
         Args:
-            provider: "ollama", "claude", or "openai" (for OpenAI-compatible APIs)
-            model: Model name
-            anthropic_api_key: API key for Claude (optional)
-            api_base_url: Base URL for OpenAI-compatible API (e.g., your internal endpoint)
-            api_key: API key for OpenAI-compatible API
+            model: Ollama model name (e.g., "llama3.1:8b", "mistral", "phi3")
         """
-        self.provider = provider
         self.model = model
-        self.anthropic_api_key = anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
-        self.api_base_url = api_base_url or os.getenv("OPENAI_API_BASE")
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
 
-        if provider == "claude" and not self.anthropic_api_key:
-            print("Warning: No Anthropic API key found, falling back to Ollama")
-            self.provider = "ollama"
+        # Test Ollama connection
+        try:
+            ollama.list()
+            print(f"Ollama connected, using model: {model}")
+        except Exception as e:
+            print(f"Ollama not running? Error: {e}")
+            print("Start Ollama with: ollama serve")
+            print(f"Then pull model: ollama pull {model}")
 
-        if provider == "openai":
-            if not self.api_base_url:
-                print("Warning: No API base URL set. Use --api-url or OPENAI_API_BASE env var")
-            else:
-                print(f"Using OpenAI-compatible API at: {self.api_base_url}")
-                print(f"Model: {model}")
-
-        if provider == "ollama":
-            # Test Ollama connection
-            try:
-                ollama.list()
-                print(f"Ollama connected, using model: {model}")
-            except Exception as e:
-                print(f"Ollama not running? Error: {e}")
-                print("Start Ollama with: ollama serve")
-                print(f"Then pull model: ollama pull {model}")
-                
     def _build_prompt(self, transcript: str, user_context: Optional[str] = None) -> tuple:
         """Build the prompt for the LLM."""
 
@@ -201,12 +175,11 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
         user_msg += f"TRANSCRIPT:\n{transcript}\n\n---\nQuestion: {question}"
 
         return system, user_msg
-        
+
     def get_suggestion(
         self,
         transcript: str,
         context: Optional[str] = None,
-        files: list = None,
         max_tokens: int = 150
     ) -> str:
         """
@@ -215,7 +188,6 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
         Args:
             transcript: The conversation transcript
             context: Optional additional context (notes, docs, etc.)
-            files: Optional list of (path, type, base64_data) for documents/images
             max_tokens: Maximum response length
 
         Returns:
@@ -225,13 +197,7 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
             return "No conversation detected yet..."
 
         system, user_msg = self._build_prompt(transcript, context)
-
-        if self.provider == "ollama":
-            result = self._query_ollama(system, user_msg, max_tokens)
-        elif self.provider == "openai":
-            result = self._query_openai(system, user_msg, max_tokens)
-        else:
-            result = self._query_claude(system, user_msg, max_tokens, files=files)
+        result = self._query_ollama(system, user_msg, max_tokens)
 
         # Log the suggestion
         get_logger().log_suggestion(transcript, result, self.model)
@@ -242,7 +208,6 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
         self,
         transcript: str,
         context: Optional[str] = None,
-        files: list = None,
         max_tokens: int = 500
     ) -> str:
         """
@@ -251,7 +216,6 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
         Args:
             transcript: The conversation transcript
             context: Optional context about the conversation
-            files: Optional list of (path, type, base64_data) for documents/images
             max_tokens: Maximum response length
 
         Returns:
@@ -261,22 +225,13 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
             return "Waiting for conversation..."
 
         system, user_msg = self._build_interpretation_prompt(transcript, context)
-
-        if self.provider == "ollama":
-            result = self._query_ollama(system, user_msg, max_tokens)
-        elif self.provider == "openai":
-            result = self._query_openai(system, user_msg, max_tokens)
-        else:
-            result = self._query_claude(system, user_msg, max_tokens, files=files)
-
-        return result
+        return self._query_ollama(system, user_msg, max_tokens)
 
     def ask_question(
         self,
         transcript: str,
         question: str,
         context: Optional[str] = None,
-        files: list = None,
         max_tokens: int = 300
     ) -> str:
         """
@@ -286,7 +241,6 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
             transcript: The conversation transcript
             question: The user's question
             context: Optional context about the conversation
-            files: Optional list of (path, type, base64_data) for documents/images
             max_tokens: Maximum response length
 
         Returns:
@@ -299,15 +253,7 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
             return "Please enter a question."
 
         system, user_msg = self._build_question_prompt(transcript, question, context)
-
-        if self.provider == "ollama":
-            result = self._query_ollama(system, user_msg, max_tokens)
-        elif self.provider == "openai":
-            result = self._query_openai(system, user_msg, max_tokens)
-        else:
-            result = self._query_claude(system, user_msg, max_tokens, files=files)
-
-        return result
+        return self._query_ollama(system, user_msg, max_tokens)
 
     def _query_ollama(self, system: str, user_msg: str, max_tokens: int) -> str:
         """Query local Ollama instance."""
@@ -324,134 +270,22 @@ Format: Use plain text for simple answers. For longer answers, use HTML:
                 }
             )
             return response["message"]["content"].strip()
-            
+
         except Exception as e:
             return f"Ollama error: {e}"
-            
-    def _query_claude(self, system: str, user_msg: str, max_tokens: int, files: list = None) -> str:
-        """
-        Query Claude API.
-
-        Args:
-            system: System prompt
-            user_msg: User message
-            max_tokens: Max response tokens
-            files: Optional list of (path, type, base64_data) tuples for images/PDFs
-        """
-        try:
-            import anthropic
-
-            client = anthropic.Anthropic(api_key=self.anthropic_api_key)
-
-            # Build content array (supports multimodal)
-            content = []
-
-            # Add any files/images first
-            if files:
-                for file_path, file_type, file_data in files:
-                    if file_type == 'image':
-                        # Determine media type from extension
-                        ext = os.path.splitext(file_path)[1].lower()
-                        media_types = {
-                            '.png': 'image/png',
-                            '.jpg': 'image/jpeg',
-                            '.jpeg': 'image/jpeg',
-                            '.gif': 'image/gif',
-                            '.webp': 'image/webp',
-                            '.bmp': 'image/bmp'
-                        }
-                        media_type = media_types.get(ext, 'image/png')
-
-                        content.append({
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": file_data
-                            }
-                        })
-                    elif file_type == 'pdf':
-                        # Claude supports PDF via document type
-                        content.append({
-                            "type": "document",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "application/pdf",
-                                "data": file_data
-                            }
-                        })
-                    elif file_type == 'text':
-                        # Add text content inline
-                        file_name = os.path.basename(file_path)
-                        content.append({
-                            "type": "text",
-                            "text": f"[Content from {file_name}]:\n{file_data}\n\n"
-                        })
-
-            # Add the main user message
-            content.append({"type": "text", "text": user_msg})
-
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=max_tokens,
-                system=system,
-                messages=[
-                    {"role": "user", "content": content}
-                ]
-            )
-            return response.content[0].text.strip()
-
-        except ImportError:
-            return "anthropic package not installed. Run: pip install anthropic"
-        except Exception as e:
-            return f"Claude API error: {e}"
-
-    def _query_openai(self, system: str, user_msg: str, max_tokens: int) -> str:
-        """Query OpenAI-compatible API (works with internal endpoints)."""
-        try:
-            url = f"{self.api_base_url.rstrip('/')}/chat/completions"
-
-            headers = {
-                "Content-Type": "application/json",
-            }
-            if self.api_key:
-                headers["Authorization"] = f"Bearer {self.api_key}"
-
-            payload = {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_msg}
-                ],
-                "max_tokens": max_tokens,
-                "temperature": 0.7,
-            }
-
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            response.raise_for_status()
-
-            data = response.json()
-            return data["choices"][0]["message"]["content"].strip()
-
-        except requests.exceptions.Timeout:
-            return "API timeout - try again"
-        except requests.exceptions.RequestException as e:
-            return f"API error: {e}"
-        except (KeyError, IndexError) as e:
-            return f"Unexpected API response format: {e}"
 
 
 # Quick test
 if __name__ == "__main__":
-    client = LLMClient(provider="ollama", model="llama3.1:8b")
-    
+    client = LLMClient(model="llama3.1:8b")
+
     test_transcript = """
     Other person: Hi, thanks for taking the time to meet with me today.
     Me: Of course, happy to chat.
-    Other person: So I wanted to discuss the proposal you sent over. 
+    Other person: So I wanted to discuss the proposal you sent over.
     The pricing looks good but I have some questions about the timeline.
     Can you walk me through that?
     """
-    
+
     suggestion = client.get_suggestion(test_transcript)
     print(f"Suggestion: {suggestion}")

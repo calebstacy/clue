@@ -1,5 +1,5 @@
 """
-LocalCluely with Electron UI - Local AI meeting assistant
+LocalCluely with Electron UI - Local AI meeting assistant (Local-only version)
 
 Hotkeys:
     Ctrl+Shift+Space: Get suggestion based on recent conversation
@@ -23,18 +23,15 @@ class LocalCluelyElectron:
     def __init__(
         self,
         whisper_model: str = "large-v3",
-        llm_provider: str = "ollama",
         llm_model: str = "llama3.1:8b",
         transcript_seconds: float = 60,
-        api_base_url: str = None,
-        api_key: str = None,
-        anthropic_api_key: str = None,
     ):
         self.transcript_seconds = transcript_seconds
         self.is_running = False
 
         print("=" * 50)
         print("  LocalCluely (Electron UI) - Meeting Assistant")
+        print("  100% Local - No Cloud APIs")
         print("=" * 50)
         print()
 
@@ -49,14 +46,8 @@ class LocalCluelyElectron:
             compute_type="float16"
         )
 
-        print("[3/4] Initializing LLM client...")
-        self.llm_client = LLMClient(
-            provider=llm_provider,
-            model=llm_model,
-            api_base_url=api_base_url,
-            api_key=api_key,
-            anthropic_api_key=anthropic_api_key,
-        )
+        print("[3/4] Initializing Ollama LLM client...")
+        self.llm_client = LLMClient(model=llm_model)
 
         print("[4/4] Setting up socket bridge for Electron UI...")
         self.bridge = SocketBridge(port=9999)
@@ -301,7 +292,7 @@ def main():
     whisper_config = config.get("whisper", {})
     context_config = config.get("context", {})
 
-    parser = argparse.ArgumentParser(description="LocalCluely with Electron UI")
+    parser = argparse.ArgumentParser(description="LocalCluely with Electron UI (Local-only)")
     parser.add_argument(
         "--whisper",
         default=whisper_config.get("model", "large-v3"),
@@ -309,30 +300,9 @@ def main():
         help="Whisper model size"
     )
     parser.add_argument(
-        "--llm",
-        default=llm_config.get("provider", "claude"),
-        choices=["ollama", "claude", "openai"],
-        help="LLM provider"
-    )
-    parser.add_argument(
         "--model",
         default=llm_config.get("model", "llama3.1:8b"),
-        help="LLM model name"
-    )
-    parser.add_argument(
-        "--api-url",
-        default=llm_config.get("openai_api_base"),
-        help="Base URL for OpenAI-compatible API"
-    )
-    parser.add_argument(
-        "--api-key",
-        default=llm_config.get("openai_api_key"),
-        help="API key for OpenAI-compatible API"
-    )
-    parser.add_argument(
-        "--anthropic-key",
-        default=llm_config.get("anthropic_api_key"),
-        help="API key for Claude"
+        help="Ollama model name (e.g., llama3.1:8b, mistral, phi3)"
     )
     parser.add_argument(
         "--context",
@@ -345,12 +315,8 @@ def main():
 
     cluely = LocalCluelyElectron(
         whisper_model=args.whisper,
-        llm_provider=args.llm,
         llm_model=args.model,
         transcript_seconds=args.context,
-        api_base_url=args.api_url,
-        api_key=args.api_key,
-        anthropic_api_key=args.anthropic_key,
     )
 
     cluely.run()

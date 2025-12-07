@@ -1,20 +1,21 @@
 # LocalCluely 🎧
 
-Local AI meeting assistant - like Cluely but running entirely on your machine.
+Local AI meeting assistant - runs **100% locally** on your machine. No cloud APIs, no data leaves your computer.
 
 ## Features
 
-- **Real-time transcription** via Whisper (runs on your 3090)
-- **AI suggestions** via Ollama (local) or Claude API
-- **Always-on-top overlay** with hotkey activation
-- **Zero cloud dependency** (with Ollama)
+- **Real-time transcription** via Whisper (runs on your GPU)
+- **AI suggestions** via Ollama (completely local)
+- **Glassmorphism Electron UI** with Windows acrylic blur
+- **Zero cloud dependency** - everything runs on your machine
 
 ## Requirements
 
 - Windows 10/11
 - NVIDIA GPU with CUDA (tested on 3090)
 - Python 3.10+
-- [Ollama](https://ollama.ai) installed (for local LLM)
+- Node.js 18+ (for Electron UI)
+- [Ollama](https://ollama.ai) installed
 
 ## Quick Start
 
@@ -41,10 +42,24 @@ conda install cudatoolkit=11.8
 # Or install CUDA from NVIDIA directly
 ```
 
-### 3. Run it
+### 3. Install Electron dependencies
 
 ```bash
-python main.py
+cd electron-ui
+npm install
+cd ..
+```
+
+### 4. Run it
+
+Start both the Python backend and Electron UI:
+
+```bash
+# Terminal 1 - Python backend
+python main_electron.py
+
+# Terminal 2 - Electron UI
+cd electron-ui && npx electron .
 ```
 
 ## Usage
@@ -52,47 +67,22 @@ python main.py
 | Hotkey | Action |
 |--------|--------|
 | `Ctrl+Shift+Space` | Get AI suggestion based on last 60s of conversation |
-| `Ctrl+Shift+O` | Toggle overlay visibility |
-| `Ctrl+Shift+C` | Clear transcript buffer |
 | `Ctrl+Shift+Q` | Quit |
-| `Esc` | Hide overlay |
 
 ## Options
 
 ```bash
-python main.py --help
+python main_electron.py --help
 
 # Use smaller/faster Whisper model
-python main.py --whisper base
-
-# Use Claude API instead of Ollama
-python main.py --llm claude
+python main_electron.py --whisper base
 
 # Different Ollama model
-python main.py --model mistral
+python main_electron.py --model mistral
 
 # More context (90 seconds)
-python main.py --context 90
+python main_electron.py --context 90
 ```
-
-## Using Claude API (Optional)
-
-If you want to use Claude instead of local Ollama:
-
-1. Set your API key:
-   ```bash
-   set ANTHROPIC_API_KEY=your-key-here
-   ```
-
-2. Install the anthropic package:
-   ```bash
-   pip install anthropic
-   ```
-
-3. Run with Claude:
-   ```bash
-   python main.py --llm claude
-   ```
 
 ## Architecture
 
@@ -103,11 +93,11 @@ System Audio (WASAPI Loopback)
          ↓
    Whisper (GPU) → Rolling Transcript Buffer
          ↓
-   [Hotkey Pressed]
+   [Auto/Hotkey]
          ↓
-   LLM (Ollama/Claude)
+   Ollama LLM (Local)
          ↓
-   Overlay Display
+   Electron UI (via TCP Socket)
 ```
 
 ## Troubleshooting
@@ -123,10 +113,9 @@ Make sure you're running on Windows. macOS requires additional setup (BlackHole)
 - Make sure Ollama is running: `ollama serve`
 - Make sure model is pulled: `ollama pull llama3.1:8b`
 
-### Overlay not showing
-- Check if it's behind other windows
-- Press `Ctrl+Shift+O` to toggle
-- Try dragging it (it's draggable)
+### Electron UI not connecting
+- Make sure Python backend is running first
+- Check that port 9999 is not blocked
 
 ## License
 
